@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Tanda Tangan Pin Payout make.fun</title>
+    <style>
+      :root {
+        --bg: #f4f6f7;
+        --surface: #ffffff;
+        --surface-2: #eef1f2;
+        --ink: #16211f;
+        --ink-soft: #43524f;
+        --line: #d5dddb;
+        --accent: #0e6e5c;
+        --accent-ink: #ffffff;
+        --accent-soft: #e2f0ec;
+        --ok: #0e6e5c;
+        --err-bg: #fbeae8;
+        --err-ink: #8c2b21;
+        --warn-bg: #fdf3e0;
+        --warn-ink: #7a5410;
+        --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #101514;
+          --surface: #181f1e;
+          --surface-2: #202826;
+          --ink: #e8efed;
+          --ink-soft: #a7b6b2;
+          --line: #2e3a38;
+          --accent: #2ea88d;
+          --accent-ink: #08130f;
+          --accent-soft: #17332c;
+          --ok: #4cc2a5;
+          --err-bg: #3d1f1c;
+          --err-ink: #f2b3ab;
+          --warn-bg: #3a2f16;
+          --warn-ink: #ecc887;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.55;
+        -webkit-text-size-adjust: 100%;
+      }
+      main {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 28px 18px 56px;
+      }
+      h1 {
+        font-size: 1.5rem;
+        line-height: 1.25;
+        margin: 0 0 10px;
+        letter-spacing: -0.01em;
+      }
+      .lede { color: var(--ink-soft); margin: 0 0 24px; font-size: 1rem; }
+      section {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 18px;
+        margin-bottom: 16px;
+      }
+      h2 {
+        font-size: 1.05rem;
+        margin: 0 0 10px;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      h2 .step-no {
+        font-family: var(--mono);
+        font-size: 0.85rem;
+        color: var(--accent);
+        font-weight: 700;
+      }
+      p { margin: 0 0 10px; }
+      p:last-child { margin-bottom: 0; }
+      .purpose { border-left: 4px solid var(--accent); }
+      .purpose strong { color: var(--accent); }
+      .addr {
+        font-family: var(--mono);
+        font-size: 0.82rem;
+        word-break: break-all;
+        background: var(--surface-2);
+        border-radius: 6px;
+        padding: 2px 6px;
+      }
+      .msg-box {
+        width: 100%;
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        line-height: 1.5;
+        background: var(--surface-2);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        resize: none;
+        word-break: break-all;
+      }
+      .status {
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 0.92rem;
+        margin-top: 12px;
+        display: none;
+      }
+      .status.show { display: block; }
+      .status.ok { background: var(--accent-soft); color: var(--ink); }
+      .status.err { background: var(--err-bg); color: var(--err-ink); }
+      .status.warn { background: var(--warn-bg); color: var(--warn-ink); }
+      .status .mono { font-family: var(--mono); font-size: 0.82rem; word-break: break-all; }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: var(--accent-ink);
+        font: inherit;
+        font-weight: 600;
+        padding: 12px 18px;
+        min-height: 48px;
+        width: 100%;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) { filter: brightness(1.07); }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      button.secondary {
+        background: var(--surface-2);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        width: auto;
+        min-height: 44px;
+        padding: 10px 16px;
+      }
+      .hidden { display: none !important; }
+      .result-meta {
+        font-size: 0.92rem;
+        color: var(--ink-soft);
+        margin-top: 10px;
+      }
+      .result-meta .mono { font-family: var(--mono); font-size: 0.85rem; color: var(--ink); word-break: break-all; }
+      .copy-row { margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .copied-note { font-size: 0.9rem; color: var(--ok); font-weight: 600; }
+      .fineprint { font-size: 0.88rem; color: var(--ink-soft); }
+      ul.checks { margin: 8px 0 0; padding-left: 20px; }
+      ul.checks li { margin-bottom: 4px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Tanda Tangan Pin Payout make.fun</h1>
+      <p class="lede">Satu tanda tangan pesan dari dompet Bitget kamu, supaya hadiah bounty make.fun dibayar ke dompetmu sendiri.</p>
+
+      <section class="purpose">
+        <h2>Apa yang dilakukan halaman ini</h2>
+        <p>Halaman ini hanya meminta dompetmu untuk <strong>MENANDATANGANI SEBUAH PESAN</strong>. Ini <strong>bukan transaksi</strong>, tidak memindahkan dana apa pun, dan tidak menyetujui pengeluaran apa pun.</p>
+        <p>Isi pesannya hanya menyatakan: bayar hadiah bounty make.fun saya ke dompet saya sendiri <span class="addr">DonkmYST6jg1ZGbCZvLfc1D138AZ9KxaXUoc1iJLYbz8</span>, dan izinkan agen <span class="addr">7EBh8QS1JN55vK57d8Noy8HJC1xQS87peNbtXaiNhgp3</span> tetap menandatangani entri saya.</p>
+        <p>Tidak ada yang meninggalkan halaman ini selain teks yang kamu salin sendiri.</p>
+        <div class="status" id="selfcheck" role="status"></div>
+      </section>
+
+      <section>
+        <h2>Pesan yang akan ditandatangani</h2>
+        <p class="fineprint">Tampil persis seperti yang akan ditandatangani — byte per byte.</p>
+        <textarea class="msg-box" id="messageBox" rows="7" readonly></textarea>
+      </section>
+
+      <section>
+        <h2><span class="step-no">1</span> Hubungkan dompet</h2>
+        <p>Buka halaman ini di browser PC yang ekstensi Bitget Wallet-nya sudah terpasang dan terbuka kuncinya, lalu tekan tombol di bawah.</p>
+        <button id="btnConnect" disabled>1. Hubungkan Bitget Wallet</button>
+        <div class="status" id="connectStatus" role="status"></div>
+      </section>
+
+      <section>
+        <h2><span class="step-no">2</span> Tanda tangani pesan</h2>
+        <p>Dompetmu akan menampilkan pesan di atas untuk disetujui. Periksa isinya, lalu setujui di jendela dompet.</p>
+        <button id="btnSign" disabled>2. Tanda tangani pesan</button>
+        <div class="status" id="signStatus" role="status"></div>
+      </section>
+
+      <section id="resultSection" class="hidden">
+        <h2><span class="step-no">3</span> Kirim hasilnya ke Hiyuki</h2>
+        <p>Kirim teks ini ke Hiyuki (asisten saya) — ini tanda tangan delegasinya.</p>
+        <textarea class="msg-box" id="envelopeBox" rows="8" readonly></textarea>
+        <div class="copy-row">
+          <button class="secondary" id="btnCopy">Salin</button>
+          <span class="copied-note hidden" id="copiedNote">Tersalin. Tempelkan ke Hiyuki.</span>
+        </div>
+        <p class="result-meta" id="resultMeta"></p>
+      </section>
+    </main>
+
+    <script>
+      'use strict';
+
+      var MESSAGE = 'make.fun delegation v1; Domain: make.fun; Payout: DonkmYST6jg1ZGbCZvLfc1D138AZ9KxaXUoc1iJLYbz8; Agent: 7EBh8QS1JN55vK57d8Noy8HJC1xQS87peNbtXaiNhgp3; Competitions: *; Nonce: 63a75dfee732322a544b7382d761fb1a; Issued At: 2026-11-21T03:42:55.018Z; Expiration Time: 2027-02-19T03:42:55.018Z';
+      var EXPECTED_ADDRESS = 'DonkmYST6jg1ZGbCZvLfc1D138AZ9KxaXUoc1iJLYbz8';
+      var EXPECTED_HASH = 'd0886d476f711c3a46881f59b54843c64c7d867b2507cbbb5a8bfcd3f34d74e1';
+      var EXPECTED_LENGTH = 370;
+
+      function b58decode(s) {
+        const ALPH = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+        const bytes = [0];
+        for (const ch of s) {
+          let carry = ALPH.indexOf(ch);
+          for (let i = 0; i < bytes.length; i++) { carry += bytes[i] * 58; bytes[i] = carry & 0xff; carry >>= 8; }
+          while (carry > 0) { bytes.push(carry & 0xff); carry >>= 8; }
+        }
+        let leading = 0; for (const ch of s) { if (ch === '1') leading++; else break; }
+        const out = new Uint8Array(leading + bytes.length);
+        for (let i = 0; i < bytes.length; i++) out[leading + i] = bytes[bytes.length - 1 - i];
+        return out;
+      }
+      function buildMessageBytes(text, signerAddress) {
+        const content = new TextEncoder().encode(text);
+        const domain = new Uint8Array([0xff, ...new TextEncoder().encode('solana offchain')]);
+        const appDomain = new Uint8Array(32);
+        const signerBytes = b58decode(signerAddress);
+        const out = new Uint8Array(16 + 1 + 32 + 1 + 1 + 32 + 2 + content.length);
+        let o = 0;
+        out.set(domain, o); o += 16;
+        out[o++] = 0;
+        out.set(appDomain, o); o += 32;
+        out[o++] = 0;
+        out[o++] = 1;
+        out.set(signerBytes, o); o += 32;
+        out[o++] = content.length & 0xff;
+        out[o++] = (content.length >> 8) & 0xff;
+        out.set(content, o);
+        return out;
+      }
+      function buildEnvelopeBytes(messageBytes, signature) {
+        const out = new Uint8Array(1 + 64 + messageBytes.length);
+        out[0] = 1;
+        out.set(signature, 1);
+        out.set(messageBytes, 65);
+        return out;
+      }
+
+      function toHex(bytes) {
+        var h = '';
+        for (var i = 0; i < bytes.length; i++) h += bytes[i].toString(16).padStart(2, '0');
+        return h;
+      }
+      function toBase64(bytes) {
+        var s = '';
+        var chunk = 0x8000;
+        for (var i = 0; i < bytes.length; i += chunk) {
+          s += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+        return btoa(s);
+      }
+      function showStatus(el, kind, html) {
+        el.className = 'status show ' + kind;
+        el.innerHTML = html;
+      }
+
+      var selfcheckEl = document.getElementById('selfcheck');
+      var connectStatusEl = document.getElementById('connectStatus');
+      var signStatusEl = document.getElementById('signStatus');
+      var btnConnect = document.getElementById('btnConnect');
+      var btnSign = document.getElementById('btnSign');
+      var resultSection = document.getElementById('resultSection');
+      var envelopeBox = document.getElementById('envelopeBox');
+      var resultMeta = document.getElementById('resultMeta');
+      var btnCopy = document.getElementById('btnCopy');
+      var copiedNote = document.getElementById('copiedNote');
+
+      document.getElementById('messageBox').value = MESSAGE;
+
+      var messageBytes = buildMessageBytes(MESSAGE, EXPECTED_ADDRESS);
+      var encoderOk = false;
+      var provider = null;
+      var connectedAddress = null;
+
+      // Self-check on load: SHA-256 of the encoded message must match.
+      (async function selfCheck() {
+        try {
+          var digest = await crypto.subtle.digest('SHA-256', messageBytes);
+          var hex = toHex(new Uint8Array(digest));
+          if (hex === EXPECTED_HASH && messageBytes.length === EXPECTED_LENGTH) {
+            encoderOk = true;
+            showStatus(selfcheckEl, 'ok', 'Encoder OK (370 byte, hash cocok). Halaman ini siap dipakai.');
+            btnConnect.disabled = false;
+          } else {
+            showStatus(selfcheckEl, 'err', 'Pemeriksaan encoder gagal: panjang ' + messageBytes.length + ' byte, hash <span class="mono">' + hex + '</span>. Jangan lanjutkan — hubungi Hiyuki.');
+          }
+        } catch (e) {
+          showStatus(selfcheckEl, 'err', 'Pemeriksaan encoder tidak bisa dijalankan di browser ini. Jangan lanjutkan — hubungi Hiyuki.');
+        }
+      })();
+
+      function findProvider() {
+        if (window.bitkeep && window.bitkeep.solana) return window.bitkeep.solana;
+        if (window.solana) return window.solana;
+        return null;
+      }
+
+      btnConnect.addEventListener('click', async function () {
+        if (!encoderOk) return;
+        provider = findProvider();
+        if (!provider) {
+          showStatus(connectStatusEl, 'err', 'Dompet tidak ditemukan. Buka halaman ini di browser PC yang sudah terpasang dan terbuka kunci ekstensi Bitget Wallet-nya, lalu muat ulang.');
+          return;
+        }
+        btnConnect.disabled = true;
+        try {
+          var res = await provider.connect();
+          var pk = (res && res.publicKey) || provider.publicKey;
+          connectedAddress = pk ? (typeof pk.toBase58 === 'function' ? pk.toBase58() : String(pk)) : null;
+          if (!connectedAddress) throw new Error('no public key');
+        } catch (e) {
+          showStatus(connectStatusEl, 'err', 'Koneksi dibatalkan atau gagal. Buka kunci Bitget Wallet, lalu coba hubungkan lagi.');
+          btnConnect.disabled = false;
+          return;
+        }
+        if (connectedAddress !== EXPECTED_ADDRESS) {
+          showStatus(connectStatusEl, 'err', 'Dompet yang terhubung: <span class="mono">' + connectedAddress + '</span><br>Dompet yang terhubung bukan Donk…Ybz8. Ganti ke dompet Bitget yang alamatnya Donk…Ybz8, lalu hubungkan lagi.');
+          btnConnect.disabled = false;
+          return;
+        }
+        showStatus(connectStatusEl, 'ok', 'Terhubung: <span class="mono">' + connectedAddress + '</span><br>Alamat cocok. Lanjut ke langkah 2.');
+        btnSign.disabled = false;
+      });
+
+      btnSign.addEventListener('click', async function () {
+        if (!provider || connectedAddress !== EXPECTED_ADDRESS) return;
+        btnSign.disabled = true;
+        signStatusEl.className = 'status';
+        signStatusEl.innerHTML = '';
+        var signed;
+        try {
+          signed = await provider.signMessage(messageBytes);
+        } catch (e) {
+          showStatus(signStatusEl, 'warn', 'Tanda tangan dibatalkan di dompet. Tekan tombolnya lagi kapan pun kamu siap.');
+          btnSign.disabled = false;
+          return;
+        }
+        var signature = signed && signed.signature ? signed.signature : signed;
+        if (!(signature instanceof Uint8Array)) {
+          try { signature = new Uint8Array(signature); } catch (e) { signature = null; }
+        }
+        if (!signature || signature.length !== 64) {
+          showStatus(signStatusEl, 'err', 'Tanda tangan tidak cocok dengan pesan ini. Coba lagi, atau hubungi asisten.');
+          btnSign.disabled = false;
+          return;
+        }
+        // Verify the signature locally before showing anything.
+        var verified = false;
+        try {
+          var publicKeyBytes = b58decode(connectedAddress);
+          var key = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
+          verified = await crypto.subtle.verify('Ed25519', key, signature, messageBytes);
+        } catch (e) {
+          verified = false;
+        }
+        if (!verified) {
+          showStatus(signStatusEl, 'err', 'Tanda tangan tidak cocok dengan pesan ini. Coba lagi, atau hubungi asisten.');
+          btnSign.disabled = false;
+          return;
+        }
+        var envelopeBytes = buildEnvelopeBytes(messageBytes, signature);
+        var envelopeB64 = toBase64(envelopeBytes);
+        var signatureB64 = toBase64(signature);
+        envelopeBox.value = envelopeB64;
+        resultMeta.innerHTML = 'Awal tanda tangan: <span class="mono">' + signatureB64.slice(0, 16) + '…</span><br>Panjang amplop: ' + envelopeBytes.length + ' byte (' + envelopeB64.length + ' karakter teks). Tanda tangan sudah diverifikasi di halaman ini dan cocok dengan pesan serta dompetmu.';
+        resultSection.classList.remove('hidden');
+        showStatus(signStatusEl, 'ok', 'Berhasil ditandatangani dan terverifikasi. Salin teks di langkah 3 dan kirim ke Hiyuki.');
+        resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+
+      btnCopy.addEventListener('click', async function () {
+        var text = envelopeBox.value;
+        var done = false;
+        try {
+          await navigator.clipboard.writeText(text);
+          done = true;
+        } catch (e) {
+          envelopeBox.focus();
+          envelopeBox.select();
+          try { done = document.execCommand('copy'); } catch (e2) { done = false; }
+        }
+        if (done) {
+          copiedNote.classList.remove('hidden');
+        } else {
+          envelopeBox.focus();
+          envelopeBox.select();
+        }
+      });
+    </script>
+  </body>
+</html>
