@@ -335,6 +335,123 @@
         btnSign.disabled = false;
       });
 
+      // Wallets return signatures in different shapes: raw bytes, a plain
+      // array, a serialized byte object, or a base58 / base64 / hex string.
+      // Normalize all of them to a 64-byte Uint8Array.
+      function normalizeSignature(raw) {
+        if (raw == null) return null;
+        if (raw instanceof Uint8Array) return raw;
+        if (Array.isArray(raw)) { try { return Uint8Array.from(raw); } catch (e) { return null; } }
+        if (typeof raw === 'object') {
+          if (Array.isArray(raw.data)) { try { return Uint8Array.from(raw.data); } catch (e) { return null; } }
+          if (typeof raw.length === 'number') { try { return Uint8Array.from(raw); } catch (e) { return null; } }
+          return null;
+        }
+        if (typeof raw === 'string') {
+          var s = raw.trim();
+          var i;
+          if (/^[0-9a-fA-F]{128}$/.test(s)) {
+            var hexOut = new Uint8Array(64);
+            for (i = 0; i < 64; i++) hexOut[i] = parseInt(s.substr(i * 2, 2), 16);
+            return hexOut;
+          }
+          try { var b = b58decode(s); if (b.length === 64) return b; } catch (e) {}
+          try {
+            var bin = atob(s);
+            if (bin.length === 64) {
+              var b64Out = new Uint8Array(64);
+              for (i = 0; i < 64; i++) b64Out[i] = bin.charCodeAt(i);
+              return b64Out;
+            }
+          } catch (e) {}
+        }
+        return null;
+      }
+
+      // Pure-JS Ed25519 verification (RFC 8032), used when the browser's
+      // WebCrypto has no Ed25519 — common in wallet in-app browsers, where
+      // crypto.subtle.importKey('Ed25519') throws and would otherwise block
+      // a perfectly valid signature forever.
+      var ED_P = (1n << 255n) - 19n;
+      var ED_L = (1n << 252n) + 27742317777372353535851937790883648493n;
+      function edMod(x) { var r = x % ED_P; return r < 0n ? r + ED_P : r; }
+      function edPow(b, e) {
+        var r = 1n; b = edMod(b);
+        while (e > 0n) { if (e & 1n) r = edMod(r * b); b = edMod(b * b); e >>= 1n; }
+        return r;
+      }
+      function edInv(x) { return edPow(x, ED_P - 2n); }
+      var ED_D = edMod(-121665n * edInv(121666n));
+      var ED_I = edPow(2n, (ED_P - 1n) / 4n);
+      function edBytesToIntLE(bytes) {
+        var n = 0n;
+        for (var i = bytes.length - 1; i >= 0; i--) n = (n << 8n) | BigInt(bytes[i]);
+        return n;
+      }
+      function edDecodePoint(bytes) {
+        var bits = edBytesToIntLE(bytes);
+        var sign = (bits >> 255n) & 1n;
+        var y = bits & ((1n << 255n) - 1n);
+        if (y >= ED_P) return null;
+        var yy = edMod(y * y);
+        var xx = edMod((yy - 1n) * edInv(edMod(ED_D * yy + 1n)));
+        var x = edPow(xx, (ED_P + 3n) / 8n);
+        if (edMod(x * x - xx) !== 0n) x = edMod(x * ED_I);
+        if (edMod(x * x - xx) !== 0n) return null;
+        if ((x & 1n) !== sign) x = ED_P - x;
+        return { x: x, y: y, z: 1n, t: edMod(x * y) };
+      }
+      function edAdd(Pt, Qt) {
+        var a = edMod((Pt.y - Pt.x) * (Qt.y - Qt.x));
+        var b = edMod((Pt.y + Pt.x) * (Qt.y + Qt.x));
+        var c = edMod(2n * ED_D * Pt.t * Qt.t);
+        var d2 = edMod(2n * Pt.z * Qt.z);
+        var e = edMod(b - a), f = edMod(d2 - c), g = edMod(d2 + c), h = edMod(b + a);
+        return { x: edMod(e * f), y: edMod(g * h), t: edMod(e * h), z: edMod(f * g) };
+      }
+      function edMul(Pt, n) {
+        var Qt = { x: 0n, y: 1n, z: 1n, t: 0n };
+        var base = Pt;
+        while (n > 0n) { if (n & 1n) Qt = edAdd(Qt, base); base = edAdd(base, base); n >>= 1n; }
+        return Qt;
+      }
+      function edEq(Pt, Qt) {
+        return edMod(Pt.x * Qt.z - Qt.x * Pt.z) === 0n && edMod(Pt.y * Qt.z - Qt.y * Pt.z) === 0n;
+      }
+      var ED_B_BYTES = new Uint8Array(32);
+      ED_B_BYTES[0] = 0x58;
+      for (var edBi = 1; edBi < 32; edBi++) ED_B_BYTES[edBi] = 0x66;
+      var ED_B = edDecodePoint(ED_B_BYTES);
+      async function ed25519VerifyJS(signature, message, publicKey) {
+        if (signature.length !== 64 || publicKey.length !== 32 || !ED_B) return false;
+        var A = edDecodePoint(publicKey);
+        if (!A) return false;
+        var Rbytes = signature.subarray(0, 32);
+        var R = edDecodePoint(Rbytes);
+        if (!R) return false;
+        var S = edBytesToIntLE(signature.subarray(32, 64));
+        if (S >= ED_L) return false;
+        var hInput = new Uint8Array(64 + message.length);
+        hInput.set(Rbytes, 0);
+        hInput.set(publicKey, 32);
+        hInput.set(message, 64);
+        var hDigest = await crypto.subtle.digest('SHA-512', hInput);
+        var h = edBytesToIntLE(new Uint8Array(hDigest)) % ED_L;
+        return edEq(edMul(ED_B, S), edAdd(R, edMul(A, h)));
+      }
+
+      // Verify with WebCrypto when it supports Ed25519; fall back to the
+      // built-in verifier when it does not. Throws only when no verifier
+      // could run at all.
+      async function verifySignature(signature, publicKeyBytes) {
+        try {
+          var key = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
+          return await crypto.subtle.verify('Ed25519', key, signature, messageBytes);
+        } catch (e) {
+          return await ed25519VerifyJS(signature, messageBytes, publicKeyBytes);
+        }
+      }
+
       btnSign.addEventListener('click', async function () {
         if (!provider || connectedAddress !== EXPECTED_ADDRESS) return;
         btnSign.disabled = true;
@@ -348,26 +465,24 @@
           btnSign.disabled = false;
           return;
         }
-        var signature = signed && signed.signature ? signed.signature : signed;
-        if (!(signature instanceof Uint8Array)) {
-          try { signature = new Uint8Array(signature); } catch (e) { signature = null; }
-        }
+        var rawSig = (signed && typeof signed === 'object' && signed.signature !== undefined) ? signed.signature : signed;
+        var signature = normalizeSignature(rawSig);
         if (!signature || signature.length !== 64) {
-          showStatus(signStatusEl, 'err', 'Tanda tangan tidak cocok dengan pesan ini. Coba lagi, atau hubungi asisten.');
+          var diag = rawSig == null ? 'kosong' : String(typeof rawSig) + (rawSig && rawSig.length !== undefined ? ', panjang ' + rawSig.length : '');
+          showStatus(signStatusEl, 'err', 'Hasil tanda tangan dari dompet tidak terbaca (format: ' + diag + '). Coba tekan tombol tanda tangan sekali lagi. Kalau tetap muncul, hubungi Hiyuki dan sebutkan tulisan dalam kurung ini.');
           btnSign.disabled = false;
           return;
         }
         // Verify the signature locally before showing anything.
         var verified = false;
+        var verifyAvailable = true;
         try {
-          var publicKeyBytes = b58decode(connectedAddress);
-          var key = await crypto.subtle.importKey('raw', publicKeyBytes, { name: 'Ed25519' }, false, ['verify']);
-          verified = await crypto.subtle.verify('Ed25519', key, signature, messageBytes);
+          verified = await verifySignature(signature, b58decode(connectedAddress));
         } catch (e) {
-          verified = false;
+          verifyAvailable = false;
         }
-        if (!verified) {
-          showStatus(signStatusEl, 'err', 'Tanda tangan tidak cocok dengan pesan ini. Coba lagi, atau hubungi asisten.');
+        if (verifyAvailable && !verified) {
+          showStatus(signStatusEl, 'err', 'Tanda tangan tidak cocok dengan pesan ini. Coba lagi, atau hubungi Hiyuki.');
           btnSign.disabled = false;
           return;
         }
@@ -375,9 +490,13 @@
         var envelopeB64 = toBase64(envelopeBytes);
         var signatureB64 = toBase64(signature);
         envelopeBox.value = envelopeB64;
-        resultMeta.innerHTML = 'Awal tanda tangan: <span class="mono">' + signatureB64.slice(0, 16) + '…</span><br>Panjang amplop: ' + envelopeBytes.length + ' byte (' + envelopeB64.length + ' karakter teks). Tanda tangan sudah diverifikasi di halaman ini dan cocok dengan pesan serta dompetmu.';
+        resultMeta.innerHTML = 'Awal tanda tangan: <span class="mono">' + signatureB64.slice(0, 16) + '…</span><br>Panjang amplop: ' + envelopeBytes.length + ' byte (' + envelopeB64.length + ' karakter teks).' + (verifyAvailable
+          ? ' Tanda tangan sudah diverifikasi di halaman ini dan cocok dengan pesan serta dompetmu.'
+          : ' Catatan: browser ini tidak menyediakan cara memverifikasi tanda tangan secara lokal, jadi kode ini belum terverifikasi di halaman ini — Hiyuki akan memeriksanya saat mendaftarkannya.');
         resultSection.classList.remove('hidden');
-        showStatus(signStatusEl, 'ok', 'Berhasil ditandatangani dan terverifikasi. Salin teks di langkah 3 dan kirim ke Hiyuki.');
+        showStatus(signStatusEl, 'ok', verifyAvailable
+          ? 'Berhasil ditandatangani dan terverifikasi. Salin teks di langkah 3 dan kirim ke Hiyuki.'
+          : 'Berhasil ditandatangani. Salin teks di langkah 3 dan kirim ke Hiyuki.');
         resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
 
